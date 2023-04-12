@@ -484,27 +484,35 @@ int ikcp_send(ikcpcb *kcp, const char *buffer, int len)
 	if (len < 0) return -1;
 
 	// append to previous segment in streaming mode (if possible)
+	//1. 如果KCP开启流模式
 	if (kcp->stream != 0) {
 		if (!iqueue_is_empty(&kcp->snd_queue)) {
+			//取出snd_queue中的最后一个报文,将其填充至mss的长度,设置frg为0
 			IKCPSEG *old = iqueue_entry(kcp->snd_queue.prev, IKCPSEG, node);
+			//旧分片内数据长度小于mss
 			if (old->len < kcp->mss) {
+				//还能容纳的数据长度
 				int capacity = kcp->mss - old->len;
+				//需要填充的数据长度
 				int extend = (len < capacity)? len : capacity;
+				//新建segment
 				seg = ikcp_segment_new(kcp, old->len + extend);
 				assert(seg);
 				if (seg == NULL) {
 					return -2;
 				}
+				//新分片添加到发送队列的尾部
 				iqueue_add_tail(&seg->node, &kcp->snd_queue);
+				//拷贝旧分片的数据到新分片
 				memcpy(seg->data, old->data, old->len);
 				if (buffer) {
 					memcpy(seg->data + old->len, buffer, extend);
-					buffer += extend;
+					buffer += extend;//buffer指向剩余数据的开头
 				}
 				seg->len = old->len + extend;
 				seg->frg = 0;
 				len -= extend;
-				iqueue_del_init(&old->node);
+				iqueue_del_init(&old->node);//删除old
 				ikcp_segment_delete(kcp, old);
 			}
 		}
@@ -974,6 +982,7 @@ void ikcp_flush(ikcpcb *kcp)
 	count = kcp->ackcount;
 	for (i = 0; i < count; i++) {
 		size = (int)(ptr - buffer);
+
 		if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu) {
 			ikcp_output(kcp, buffer, size);
 			ptr = buffer;
@@ -1162,7 +1171,7 @@ void ikcp_flush(ikcpcb *kcp)
 		kcp->ssthresh = inflight / 2;
 		if (kcp->ssthresh < IKCP_THRESH_MIN)
 			kcp->ssthresh = IKCP_THRESH_MIN;
-		kcp->cwnd = kcp->ssthresh + resent;
+		kcp->cwnd = kcp->ssthresh + resent;//动态调整拥塞控制窗口,加了个resent?
 		kcp->incr = kcp->cwnd * kcp->mss;
 	}
 	//如果发生了丢包,阈值减半,cwn窗口保留为 1

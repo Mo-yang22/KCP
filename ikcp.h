@@ -281,7 +281,7 @@ struct IKCPSEG
 	IUINT32 ts;//记录发送时的时间戳，用来估计RTT
 	IUINT32 sn;//为data报文的编号或者ack报文的确认编号
 	IUINT32 una;//应该是UNA协议下表示收到的包（之前的包都收到）
-	IUINT32 len;//
+	IUINT32 len;//data的长度
 	IUINT32 resendts;//为下一次重发该报文的时间
 	IUINT32 rto;//重传超时时间
 	IUINT32 fastack;//记录该报文在收到ACK时被跳过了几次，用于快重传
@@ -301,9 +301,9 @@ struct IKCPCB
     IUINT32 mss;    // 最大分片大小,不大于mtu
     IUINT32 state;  // 连接状态(0xffffffff表示断开连接)
     
-    IUINT32 snd_una;    // 第一个未确认的包
+    IUINT32 snd_una;    // 第一个未确认的包，发送窗口最左边
     IUINT32 snd_nxt;    // 下一个待分配包的序号
-    IUINT32 rcv_nxt;    // 待接收消息序号.为了保证包的顺序,接收方会维护一个接收窗口,接收窗口有一个起始序号rcv_nxt 以及尾序号rcv_nxt + rcv_wnd(接收窗口大小)
+    IUINT32 rcv_nxt;    // 接收窗口最左边
 
     IUINT32 ts_recent;  
     IUINT32 ts_lastack;
