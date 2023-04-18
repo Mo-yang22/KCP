@@ -355,6 +355,7 @@ void ikcp_setoutput(ikcpcb *kcp, int (*output)(const char *buf, int len,
 //---------------------------------------------------------------------
 // user/upper level recv: returns size, returns below zero for EAGAIN
 //---------------------------------------------------------------------
+//当len为负数时，表示是peek，即不删除rcv_queue的数据
 int ikcp_recv(ikcpcb *kcp, char *buffer, int len)
 {
 	struct IQUEUEHEAD *p;
@@ -368,7 +369,7 @@ int ikcp_recv(ikcpcb *kcp, char *buffer, int len)
 		return -1;
 
 	if (len < 0) len = -len;
-
+	//peeksize是一个消息的长度(或一个段)，必须与len相等
 	peeksize = ikcp_peeksize(kcp);
 
 	if (peeksize < 0) 
@@ -376,15 +377,15 @@ int ikcp_recv(ikcpcb *kcp, char *buffer, int len)
 
 	if (peeksize > len) 
 		return -3;
-	
-	//表示在之前,已无窗口可用
-	if (kcp->nrcv_que >= kcp->rcv_wnd)
-		recover = 1;
+	//个人理解，表示之前无空间了
+    if (kcp->nrcv_que >= kcp->rcv_wnd)
+        recover = 1;
 
 	// merge fragment
 	// 读取组好包的数据rcv_queue->用户buffer
 	//将属于同一个消息的个分片重组完整数据,并删除 rcv_queue中 segment,nrcv_que减少
 	//注意queue中的数据是有序的
+	//一次只收一个消息，当frg为0就表示收到了，当为流模式时，一次就收一个段
 	for (len = 0, p = kcp->rcv_queue.next; p != &kcp->rcv_queue; ) {
 		int fragment;
 		seg = iqueue_entry(p, IKCPSEG, node);
@@ -808,7 +809,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 		kcp->rmt_wnd = wnd;
 		//删除snd_buf中小于una的segment
 		ikcp_parse_una(kcp, una);
-		//?更新snd_una的数值
+		//更新snd_una的数值
 		ikcp_shrink_buf(kcp);
 
 		if (cmd == IKCP_CMD_ACK) {
@@ -991,6 +992,7 @@ void ikcp_flush(ikcpcb *kcp)
 			ptr = buffer;
 		}
 		ikcp_ack_get(kcp, i, &seg.sn, &seg.ts);//得到sn和ts
+		//下面这个函数将ptr指向的地址存储seg，且ptr往后移
 		ptr = ikcp_encode_seg(ptr, &seg);//编码segment协议头
 	}
 
@@ -1028,6 +1030,7 @@ void ikcp_flush(ikcpcb *kcp)
 	}
 
 	// flush window probing commands
+	//跟ACK报文很像，也是以流的形式
 	if (kcp->probe & IKCP_ASK_SEND) {
 		seg.cmd = IKCP_CMD_WASK;
 		size = (int)(ptr - buffer);
@@ -1092,7 +1095,7 @@ void ikcp_flush(ikcpcb *kcp)
 	// 1.新的报文,正常发送
 	// 2.超时重传
 	// 3. 快速重传(如果有) 
-	//遍历所有的snd_buf,不明白为什么终止条件是P==&kcp->snd_buf
+	//遍历所有的snd_buf,双向链表终止条件就是p==kcp->snd_buf
 	for (p = kcp->snd_buf.next; p != &kcp->snd_buf; p = p->next) {
 		IKCPSEG *segment = iqueue_entry(p, IKCPSEG, node);
 		int needsend = 0;

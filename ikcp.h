@@ -267,6 +267,22 @@ typedef struct IQUEUEHEAD iqueue_head;
 	#endif
 #endif
 
+/**
+|<------------ 4 bytes ------------>|
++--------+--------+--------+--------+
+|               conv                | conv：Conversation, 会话序号，用于标识收发数据包是否一致
++--------+--------+--------+--------+ cmd: command，用于标识指令，例如：push，ack等
+|  cmd   |  frg   |       wnd       | frg: Fragment, 分段序号，序号从大到小
++--------+--------+--------+--------+ wnd: 接收窗口大小
+|                ts                 | ts: 发送的时间戳
++--------+--------+--------+--------+
+|                sn                 | sn: Segment序号
++--------+--------+--------+--------+
+|                una                | una: Unacknowledged, 当前未收到的序号，即代表这个序号之前的包均收到
++--------+--------+--------+--------+
+|                len                | len: data数据的长度
++--------+--------+--------+--------+
+**/
 
 //=====================================================================
 // SEGMENT
@@ -274,6 +290,8 @@ typedef struct IQUEUEHEAD iqueue_head;
 struct IKCPSEG
 {
 	struct IQUEUEHEAD node;//node节点用来串接多个KCP segment，也就是前向后向指针
+
+	//发送信息
 	IUINT32 conv;//会话编号，通信双方必须一致才能使用KCP协议交换数据
 	IUINT32 cmd;//表明当前报文的类型，KCP共有四种类型
 	IUINT32 frg;//分片的编号，当输出数据大于MSS时，需要将数据进行分片
@@ -282,11 +300,15 @@ struct IKCPSEG
 	IUINT32 sn;//为data报文的编号或者ack报文的确认编号
 	IUINT32 una;//应该是UNA协议下表示收到的包（之前的包都收到）
 	IUINT32 len;//data的长度
+
+	//控制信息
 	IUINT32 resendts;//为下一次重发该报文的时间
 	IUINT32 rto;//重传超时时间
-	IUINT32 fastack;//记录该报文在收到ACK时被跳过了几次，用于快重传
+	IUINT32 fastack;//记录该报文在收到ACK时被跳过了几次，用于快重传。在每帧调用input时，没有该seg的ack包，则fastack++。
 	IUINT32 xmit;//记录该报文被传输了几次
-	char data[1];//为实际传输的数据，即payload
+
+	//为实际传输的数据，即payload
+	char data[1];
 };
 
 
@@ -337,7 +359,7 @@ struct IKCPCB
     IUINT32 ts_probe;       // 下次探查窗口的时间戳；
     IUINT32 probe_wait;     // 探查窗口需要等待的时间；
 
-    IUINT32 dead_link;      // 最大重传次数，被认为连接中断；
+    IUINT32 dead_link;      // 最大重传次数，超过这个次数被认为连接中断；
     IUINT32 incr;           // 可发送的最大数据量；
 
     struct IQUEUEHEAD snd_queue;    //发送消息的队列 
@@ -351,7 +373,7 @@ struct IKCPCB
     IUINT32 ackblock;   // acklist 数组的可用长度，当 acklist 的容量不足时，需要进行扩容
 
     void *user;     // 指针，可以任意放置代表用户的数据，也可以设置程序中需要传递的变量；
-    char *buffer;   // 存储字节流信息 
+    char *buffer;   // 存储字节流信息，作为ACK报文，ask报文，tell报文的缓冲区
 
     int fastresend; // 触发快速重传的重复ACK个数；
     int fastlimit;
