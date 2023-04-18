@@ -382,6 +382,7 @@ int ikcp_recv(ikcpcb *kcp, char *buffer, int len)
 		recover = 1;
 
 	// merge fragment
+	// 读取组好包的数据rcv_queue->用户buffer
 	//将属于同一个消息的个分片重组完整数据,并删除 rcv_queue中 segment,nrcv_que减少
 	//注意queue中的数据是有序的
 	for (len = 0, p = kcp->rcv_queue.next; p != &kcp->rcv_queue; ) {
@@ -406,7 +407,7 @@ int ikcp_recv(ikcpcb *kcp, char *buffer, int len)
 			ikcp_segment_delete(kcp, seg);
 			kcp->nrcv_que--;
 		}
-
+		//frg = 0,完整的数据接收到, 本次数据接收完毕
 		if (fragment == 0) 
 			break;
 	}
@@ -888,6 +889,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 		ikcp_parse_fastack(kcp, maxack, latest_ts);
 	}
 
+	//拥塞控制
 	if (_itimediff(kcp->snd_una, prev_una) > 0) {
 		if (kcp->cwnd < kcp->rmt_wnd) {
 			IUINT32 mss = kcp->mss;
@@ -898,6 +900,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 				if (kcp->incr < mss) kcp->incr = mss;
 				kcp->incr += (mss * mss) / kcp->incr + (mss / 16);
 				if ((kcp->cwnd + 1) * mss <= kcp->incr) {
+				//就是kcp->incr除mss,取上限
 				#if 1
 					kcp->cwnd = (kcp->incr + mss - 1) / ((mss > 0)? mss : 1);
 				#else
@@ -1259,6 +1262,7 @@ IUINT32 ikcp_check(const ikcpcb *kcp, IUINT32 current)
 	if (minimal >= kcp->interval) minimal = kcp->interval;
 
 	return current + minimal;
+
 }
 
 
