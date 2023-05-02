@@ -1238,6 +1238,7 @@ void ikcp_update(ikcpcb *kcp, IUINT32 current)
 // schedule ikcp_update (eg. implementing an epoll-like mechanism, 
 // or optimize ikcp_update when handling massive kcp connections)
 //---------------------------------------------------------------------
+//主要用于检查当前时间是否需要发送数据，并计算下一次发送时间。
 IUINT32 ikcp_check(const ikcpcb *kcp, IUINT32 current)
 {
 	IUINT32 ts_flush = kcp->ts_flush;
@@ -1269,7 +1270,7 @@ IUINT32 ikcp_check(const ikcpcb *kcp, IUINT32 current)
 		}
 		if (diff < tm_packet) tm_packet = diff;
 	}
-
+	//minimal取tm_flush,tm_packet和minimal中最小的一个
 	minimal = (IUINT32)(tm_packet < tm_flush ? tm_packet : tm_flush);
 	if (minimal >= kcp->interval) minimal = kcp->interval;
 
