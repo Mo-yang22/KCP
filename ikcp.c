@@ -626,7 +626,7 @@ static void ikcp_parse_una(ikcpcb *kcp, IUINT32 una)
 		}
 	}
 }
-
+//更新快速重传次数，将发送窗口中小于sn的段的fastack加1，
 static void ikcp_parse_fastack(ikcpcb *kcp, IUINT32 sn, IUINT32 ts)
 {
 	struct IQUEUEHEAD *p, *next;
@@ -641,6 +641,10 @@ static void ikcp_parse_fastack(ikcpcb *kcp, IUINT32 sn, IUINT32 ts)
 			break;
 		}
 		else if (sn != seg->sn) {
+		//对于 IKCP_FASTACK_CONSERVE 宏定义的情况，
+		//额外增加一个判断条件，
+		//即只有在收到 ACK 报文的时间戳大于等于该数据包发送的时间戳时才更新该数据包的快速重传计数器 
+		//fastack，否则不更新。这样做是为了避免对数据包的快速重传计数器进行过度更新，进而提高了快速重传算法的准确性和有效性。
 		#ifndef IKCP_FASTACK_CONSERVE
 			seg->fastack++;
 		#else
@@ -851,7 +855,8 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 			if (_itimediff(sn, kcp->rcv_nxt + kcp->rcv_wnd) < 0) {
 				//对该报文附带的ack报文放入ack列表中
 				ikcp_ack_push(kcp, sn, ts);
-				//判断接收的数据分片编号是否符合要求,但?为什么上一步要在这一步前面
+				//判断接收的数据分片编号是否符合要求
+				//无论是不是满足下面这个条件，都需要发送ack报文
 				if (_itimediff(sn, kcp->rcv_nxt) >= 0) {
 					seg = ikcp_segment_new(kcp, len);
 					seg->conv = conv;
@@ -879,6 +884,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 				ikcp_log(kcp, IKCP_LOG_IN_PROBE, "input probe");
 			}
 		}
+		//什么都不做，窗口大小在这几个if else之前就保存了
 		else if (cmd == IKCP_CMD_WINS) {
 			// do nothing
 			if (ikcp_canlog(kcp, IKCP_LOG_IN_WINS)) {
@@ -899,6 +905,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 	}
 
 	//拥塞控制
+	//更新kcp->cwnd
 	if (_itimediff(kcp->snd_una, prev_una) > 0) {
 		if (kcp->cwnd < kcp->rmt_wnd) {
 			IUINT32 mss = kcp->mss;
