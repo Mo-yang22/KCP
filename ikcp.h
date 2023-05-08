@@ -345,7 +345,7 @@ struct IKCPCB
     IUINT32 current;
     IUINT32 interval;       // 内部flush刷新间隔，对系统循环效率有非常重要影响, 间隔小了cpu占用率高, 间隔大了响应慢
     IUINT32 ts_flush;       // 下次flush刷新的时间戳
-    IUINT32 xmit;           // 发送segment的次数, 当segment的xmit增加时，xmit增加(重传除外)
+    IUINT32 xmit;           // 全局重传次数计数
 
     IUINT32 nrcv_buf;       // 接收缓存中的消息数量
     IUINT32 nsnd_buf;       // 发送缓存中的消息数量
