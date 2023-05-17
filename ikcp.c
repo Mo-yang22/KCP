@@ -852,6 +852,7 @@ int ikcp_input(ikcpcb *kcp, const char *data, long size)
 				ikcp_log(kcp, IKCP_LOG_IN_DATA, 
 					"input psh: sn=%lu ts=%lu", (unsigned long)sn, (unsigned long)ts);
 			}
+			// 要判断sn,假如超出窗口的范围,直接舍弃
 			if (_itimediff(sn, kcp->rcv_nxt + kcp->rcv_wnd) < 0) {
 				//对该报文附带的ack报文放入ack列表中
 				ikcp_ack_push(kcp, sn, ts);
@@ -1006,18 +1007,18 @@ void ikcp_flush(ikcpcb *kcp)
 	kcp->ackcount = 0;
 
 	// probe window size (if remote window size equals zero)
-	//1.远端窗口大小为0，需要发送窗口探测报文
+	// 1.远端窗口大小为0，需要发送窗口探测报文
 	if (kcp->rmt_wnd == 0) {
-		//初始化探测间隔和下一次探测时间
-		//?第一次没有将IKCP_ASK_SEND状态加到kcp->probe上,第一次不发送探测消息了吗
+		// 初始化探测间隔和下一次探测时间
+		// ?第一次没有将IKCP_ASK_SEND状态加到kcp->probe上,第一次不发送探测消息了吗
 		if (kcp->probe_wait == 0) {
 			kcp->probe_wait = IKCP_PROBE_INIT;//默认7秒探测
 			kcp->ts_probe = kcp->current + kcp->probe_wait;//下一次探测时间
 		}	
 		else {
-			//远端窗口为0,且发送过探测请求,但是已经超过下次探测的时间
+			// 远端窗口为0,且发送过探测请求,但是已经超过下次探测的时间
 			if (_itimediff(kcp->current, kcp->ts_probe) >= 0) {
-				//更新kcp->probe_wait
+				// 更新kcp->probe_wait
 				if (kcp->probe_wait < IKCP_PROBE_INIT) 
 					kcp->probe_wait = IKCP_PROBE_INIT;
 				kcp->probe_wait += kcp->probe_wait / 2;
@@ -1025,12 +1026,12 @@ void ikcp_flush(ikcpcb *kcp)
 					kcp->probe_wait = IKCP_PROBE_LIMIT;
 					//更新下一次探测的时间
 				kcp->ts_probe = kcp->current + kcp->probe_wait;
-				//加kcp->probe加上状态IKCP_ASK_SEND,发送探测消息
+				// 加kcp->probe加上状态IKCP_ASK_SEND,发送探测消息
 				kcp->probe |= IKCP_ASK_SEND;
 			}
 		}
 	}
-	//2.远端窗口正常,则不需要发送窗口探测	
+	// 2.远端窗口正常,则不需要发送窗口探测	
 	else {
 		kcp->ts_probe = 0;
 		kcp->probe_wait = 0;
@@ -1151,6 +1152,7 @@ void ikcp_flush(ikcpcb *kcp)
 			need = IKCP_OVERHEAD + segment->len;
 			
 			//当大于mtu,立即发送
+			// 将小包组装成大包
 			if (size + need > (int)kcp->mtu) {
 				ikcp_output(kcp, buffer, size);
 				ptr = buffer;
